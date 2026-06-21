@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>p.teacher - Knowledge Tree</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- External Dependencies -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script type="text/javascript" src="https://unpkg.com/localforage@1.10.0/dist/localforage.min.js"></script>
+</head>
+<body>
+
+  <div id="app-container">
+    
+    <!-- Graph Filter Controls overlay -->
+    <div class="filter-controls">
+      <h3>Domain Filters</h3>
+      <div id="domain-filters" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <!-- Checkboxes injected by app.js -->
+      </div>
+    </div>
+
+    <!-- Main vis-network canvas -->
+    <div id="knowledge-tree"></div>
+
+    <!-- Loader Overlay -->
+    <div id="loader" class="loader-overlay">
+      <div class="spinner"></div>
+      <h2 id="loader-text" style="color: var(--text-accent); font-weight: 500;">Dissecting...</h2>
+    </div>
+
+    <!-- Sidebar Toggle -->
+    <button id="toggle-sidebar" class="toggle-sidebar" title="Toggle Sidebar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+    </button>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h1>p.teacher</h1>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-target="pane-brief">Dissection</button>
+        <button class="tab-btn" data-target="pane-review">Review Queue</button>
+        <button class="tab-btn" data-target="pane-info">Node Info</button>
+        <button class="tab-btn" data-target="pane-settings">Settings</button>
+      </div>
+
+      <div class="sidebar-content">
+        
+        <!-- Dissection Tab -->
+        <div id="pane-brief" class="tab-pane active">
+          
+          <div id="file-drop-zone" class="drop-zone">
+            <svg style="margin-bottom: 0.5rem;" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <p>Drag & Drop project files here<br>or click to browse</p>
+            <input type="file" id="file-upload" multiple>
+          </div>
+          
+          <div style="text-align: center; margin-top: 1rem;">
+            <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem;">OR</p>
+            <button id="btn-select-folder" class="btn primary" style="width: 100%;">Monitor Project Folder</button>
+            <div id="watcher-status" style="font-size: 0.7rem; color: var(--text-accent); margin-top: 0.5rem;">Not monitoring</div>
+          </div>
+
+          <div id="brief-content">
+            <p style="color: var(--text-secondary); font-size: 0.875rem; text-align: center; margin-top: 2rem;">
+              Upload a file to begin extraction and build the Knowledge Tree.
+            </p>
+          </div>
+
+        </div>
+
+        </div>
+
+        <!-- Review Queue Tab -->
+        <div id="pane-review" class="tab-pane">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <button id="btn-queue-select-all" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">Select All</button>
+            <button id="btn-queue-deselect-all" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">Deselect All</button>
+          </div>
+          <div id="review-queue-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;">
+            <!-- Queue items injected here -->
+          </div>
+          <div style="text-align: center;">
+            <button id="btn-validate-selected" class="btn" disabled style="width: 100%; margin-bottom: 0.5rem;">Validate 0 Nodes via Gemini</button>
+            <div id="validation-cost-estimate" style="font-size: 0.7rem; color: var(--text-secondary);">Est. tokens: 0</div>
+          </div>
+        </div>
+
+        <!-- Node Info Tab -->
+        <div id="pane-info" class="tab-pane">
+          <div id="node-info-panel" class="node-info-card">
+            <p style="color: var(--text-secondary); text-align: center;">Click a node in the graph to view details.</p>
+          </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="pane-settings" class="tab-pane">
+          <div class="form-group">
+            <label for="api-provider">LLM Provider</label>
+            <select id="api-provider">
+              <option value="ollama">Ollama (Local)</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="openai">OpenAI GPT</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="api-key">API Key / Ollama Model</label>
+            <input type="password" id="api-key" placeholder="API Key or e.g., qwen2:7b" autocomplete="off">
+            <small style="color: var(--text-secondary); font-size: 0.7rem; margin-top: 0.25rem;">Stored locally in your browser.</small>
+          </div>
+
+          <div class="form-group" id="gemini-model-group" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="gemini-model">Gemini Model</label>
+              <button id="btn-refresh-models" class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.7rem;">Refresh Models</button>
+            </div>
+            <select id="gemini-model">
+              <option value="gemini-2.5-flash">gemini-2.5-flash (Default)</option>
+            </select>
+            <small id="gemini-model-status" style="color: var(--text-secondary); font-size: 0.7rem; margin-top: 0.25rem;"></small>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border-glass); margin: 1rem 0;">
+
+          <div class="form-group">
+            <label>API Rate Limits & Token Budget</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-size: 0.875rem;">Max RPM (Requests/Min):</span>
+              <input type="number" id="api-rpm" value="10" min="1" max="100" style="width: 80px; padding: 0.25rem;">
+            </div>
+            <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 8px; font-size: 0.8rem;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                <span style="color: var(--text-secondary);">Session Tokens Used:</span>
+                <span id="ui-total-tokens" style="color: var(--text-accent); font-weight: bold;">0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-secondary);">Queue Status:</span>
+                <span id="ui-queue-status">0 pending / 0 in-progress</span>
+              </div>
+            </div>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border-glass); margin: 1rem 0;">
+
+          <div class="form-group">
+            <label>Data Management</label>
+            <button id="btn-export" class="btn">Export Knowledge Tree JSON</button>
+            <button id="btn-clear" class="btn" style="color: #f87171; border-color: rgba(248, 113, 113, 0.3);">Wipe Entire State</button>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Main App Logic -->
+  <script src="js/domains.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/file_registry.js"></script>
+  <script src="js/directory_watcher.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/rate_limiter.js"></script>
+  <script src="js/scientific_apis.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/dissector.js"></script>
+  <script src="js/validator.js"></script>
+  <script src="js/review_queue.js"></script>
+  <script src="js/visualizer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
